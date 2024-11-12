@@ -41,6 +41,18 @@ object TypeSafeApiCrudSpec extends DynamoDBLocalSpec {
     val (id, surname, addressList, addressMap, addressSet)                                                         = ProjectionExpression.accessors[PersonWithCollections]
   }
 
+  case class PersonAttributes(address: Option[String])
+  object PersonAttributes     {
+    implicit val schema: Schema.CaseClass1[Option[String], PersonAttributes] = DeriveSchema.gen[PersonAttributes]
+    val address                                                              = ProjectionExpression.accessors[PersonAttributes]
+  }
+  case class PersonWithAttributes(id: String, attributes: PersonAttributes = PersonAttributes(None))
+  object PersonWithAttributes {
+    implicit val schema: Schema.CaseClass2[String, PersonAttributes, PersonWithAttributes] =
+      DeriveSchema.gen[PersonWithAttributes]
+    val (id, attributes)                                                                   = ProjectionExpression.accessors[PersonWithAttributes]
+  }
+
   override def spec: Spec[Environment with Scope, Any] =
     suite("TypeSafeApiCrudSpec")(
       putSuite,
@@ -419,6 +431,30 @@ object TypeSafeApiCrudSpec extends DynamoDBLocalSpec {
                  PersonWithCollections.addressMap.valueAt(address1.number).set(address1)
                ).execute
           p <- get(tableName)(PersonWithCollections.id.partitionKey === "1").execute.absolve
+        } yield assertTrue(p == expected)
+      }
+    },
+    test(
+      "set an empty map element"
+    ) {
+      withSingleIdKeyTable { tableName =>
+        val person   = PersonWithCollections("1", "Smith")
+        val expected = person
+        for {
+          _ <- put(tableName, person).execute
+          p <- get(tableName)(PersonWithCollections.id.partitionKey === "1").execute.absolve
+        } yield assertTrue(p == expected)
+      }
+    },
+    test(
+      "set an empty case class"
+    ) {
+      withSingleIdKeyTable { tableName =>
+        val person   = PersonWithAttributes("1", PersonAttributes(None))
+        val expected = person
+        for {
+          _ <- put(tableName, person).execute
+          p <- get(tableName)(PersonWithAttributes.id.partitionKey === "1").execute.absolve
         } yield assertTrue(p == expected)
       }
     },
